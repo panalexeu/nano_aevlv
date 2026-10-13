@@ -1,10 +1,9 @@
 from .base import BaseEnv
 from copy import deepcopy
-from typing import Optional
 
 import numpy as np 
 from sudoku import Sudoku
-from llama_cpp import CreateChatCompletionResponse
+from llama_cpp import CreateCompletionResponse
 
 class SudokuEnv(BaseEnv): 
     def __init__(self):
@@ -70,15 +69,14 @@ For instance, filling the cell in the first row and first column with 6, and the
 0,1,3
 '''.strip()
 
-    def parse_chat_completion(self, cmpl: CreateChatCompletionResponse) -> list[list[int]]:
-        content = cmpl['choices'][0]['message']['content']
+    def parse_completion(self, cmpl: CreateCompletionResponse) -> list[list[int]]:
+        content = cmpl['choices'][0]['text']
         lines = content.splitlines()
         actions = [line.strip().split(',' )for line in lines]
         return actions
 
-    # placeholders
-    def tool_choices(self):
-        return []
-
-    def tools(self): 
-        return []
+    def grammar(self) -> str:
+        return r'''
+root ::= line{1,10}
+line ::= [0-9] "," [0-9] "," [1-9] "\n"
+'''

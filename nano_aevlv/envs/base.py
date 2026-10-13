@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from typing import Optional, Any
  
-from llama_cpp import CreateChatCompletionResponse
+from llama_cpp import CreateCompletionResponse
 
 class BaseEnv: 
     """
@@ -34,16 +34,15 @@ class BaseEnv:
         pass 
 
     @abstractmethod
-    def tools(self,) -> list[dict]: 
-        pass
-
-    @abstractmethod
-    def tool_choices(self,) -> list[dict]: 
-        pass
-
-    @abstractmethod
-    def parse_chat_completion(self, cmpl: CreateChatCompletionResponse) -> list | dict:
+    def parse_completion(self, cmpl: CreateCompletionResponse) -> list | dict:
         """
-        parse chat completion into action 
+        parse completion into action 
         """
         pass 
+
+    @abstractmethod
+    def grammar(self) -> str: 
+        """
+        define GBNF llama.cpp grammar for the output completion  
+        """
+        pass
