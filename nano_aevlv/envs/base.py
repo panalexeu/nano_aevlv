@@ -1,4 +1,4 @@
-from typing import Optional 
+from typing import Optional, Any
 from abc import abstractmethod 
 
 class BaseEnv: 
@@ -7,9 +7,9 @@ class BaseEnv:
     """
 
     @abstractmethod
-    def step(action: dict) -> tuple[dict, Optional[float]]:
+    def step(action: dict | list) -> tuple[Any | list, Optional[float]]:
         """ 
-        apply action in the env -> return env observation and score 
+        apply action in the env -> return env state Any and score Optional[float] 
         """
         pass  
 
@@ -19,3 +19,8 @@ class BaseEnv:
         set a new episode 
         """
         pass 
+
+    @abstractmethod
+    def instructions(self,) -> str:
+        pass 
+    
