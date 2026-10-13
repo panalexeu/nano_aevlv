@@ -23,16 +23,23 @@ class SudokuEnv(BaseEnv):
         row, column, value = action[0], action[1], action[2]  
 
         try: 
+            # agent provided value in a filled slot 
+            if self.board[row][column] != 0: 
+                return 0.0
+
+            # agent provided new value correctly => update the board, score 1
             if self.solution[row][column] == value: 
                 self.board[row][column] = value 
                 return 1.0 
+            # otherwise 0.0
             else: 
-                return 0.0 
+                return 0.0
+
         except IndexError: 
             return 0.0   
 
     def reset(self, seed: float | None = None, **kwargs): 
-        width, height, difficulty = kwargs.get('width', 3), kwargs.get('height'), kwargs.get('difficulty', 0.5)
+        width, height, difficulty = kwargs.get('width', 2), kwargs.get('height'), kwargs.get('difficulty', 0.5)
 
         puzzle = Sudoku(
             seed=seed, 
@@ -51,28 +58,31 @@ class SudokuEnv(BaseEnv):
         return board
 
     def state(self) -> str:
-        return str(self.board)
+        return 'sudoku puzzle: \n' + str(self.board)
 
     def instructions(self) -> str:
         return '''
 Your task is to solve the provided sudoku puzzle iteratively.
-You are provided with a board, which is a two-dimensional matrix where 0 means an empty cell.
-For each cell you want to fill, return the row, column, and value, delimited by commas.
-Note that indexing starts from 0.
-You can fill one or more cells at a time. Put each cell on its own line.
-Your response should contain only these lines, with no other text:
-row,column,value
-row,column,value
-...
-For instance, filling the cell in the first row and first column with 6, and the cell in the first row and second column with 3, would be:
+The board is a two-dimensional matrix where 0 means an empty cell. Indexing starts from 0.
+
+After each step, you receive feedback:
+- Proposed changes: your previous changes with their scores. 1 means correct and applied to the board. 0 means the value is incorrect or the cell was already filled, and the change was not applied.
+- Failed changes: changes that raised an error, such as an out-of-range index or a malformed line.
+
+Do not repeat changes that scored 0 or failed. Only fill cells that are 0.
+
+Respond only with one or more lines in the format row,column,value. For example:
 0,0,6
 0,1,3
 '''.strip()
 
     def parse_completion(self, cmpl: CreateCompletionResponse) -> list[list[int]]:
-        content = cmpl['choices'][0]['text']
-        lines = content.splitlines()
-        actions = [line.strip().split(',' )for line in lines]
+        content = cmpl["choices"][0]["text"]
+        actions = [
+            [int(x) for x in line.split(",")]
+            for line in content.splitlines()
+            if line.strip()
+        ]
         return actions
 
     def grammar(self) -> str:

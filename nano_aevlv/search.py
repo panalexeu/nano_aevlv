@@ -8,12 +8,6 @@ from .envs import SudokuEnv
 
 _data_dir = './models'
 
-def _format_no_think(formatter: Jinja2ChatFormatter, messages: list[dict]): 
-    # append this to formatted prompt to make sure that gemma does not start thinking 
-    prompt = formatter(messages=messages).prompt
-    prompt += '<|channel>thought\n<channel|>'
-    return prompt 
-
 def _scores2probs(scores: list[float], t: float=1.0):
     s = np.asarray(scores, dtype=float)
     s = (s - s.mean()) / (s.std() + 1e-8)  
@@ -36,11 +30,17 @@ def sample_fail_changes(rng, changes: list[dict], n: int) -> list[int]:
 
 if __name__ == '__main__': 
     # search params 
-    iters = 2
+    iters = 16
     total_tokens = 1024
-    out_tokens = 512
-    alpha_name = ''
-    alpha_path = ''
+    think_tokens = 512
+    out_tokens = 128 
+    alpha_name = 'gemma-4-E4B-it-Q4_0.gguf'
+    alpha_path = os.path.join(_data_dir, alpha_name)    
+    alpha_model = Llama(
+        alpha_path, 
+        n_gpu_layers=0,
+        n_ctx=total_tokens
+    )
     beta_name = 'gemma-4-E2B-it-Q4_0.gguf'
     beta_path = os.path.join(_data_dir, beta_name)
     beta_model = Llama(
@@ -48,6 +48,7 @@ if __name__ == '__main__':
         n_gpu_layers=-1,
         n_ctx=total_tokens
     )
+    model_t = 1.0
     sample_n = 16
     sample_t = 1.0
     sample_e = 4
@@ -63,13 +64,14 @@ if __name__ == '__main__':
 
     # env 
     env = SudokuEnv()
-    env.reset(seed, difficulty=0.5)
+    env.reset(seed, difficulty=0.25)
     grammar = LlamaGrammar.from_string(env.grammar())
 
     # search loop
     scored_changes, failed_changes = [], []
     for i in range(iters): 
         model = beta_model
+
         sampled_changes_ids = sample_changes(rng, scored_changes, sample_n, sample_t)
         sampled_changes = [scored_changes[id_] for id_ in sampled_changes_ids]
         sampled_failed_changes_ids = sample_fail_changes(rng, failed_changes, sample_e)
@@ -93,18 +95,37 @@ if __name__ == '__main__':
                 "content": "failed changes: " + str(sampled_failed_changes)
             }
         ]
-        prompt = _format_no_think(formatter, messages)
+
+        # output generation in 2 phases (thinking, then output generation)
+        # think
+        prompt = formatter(messages=messages).prompt
         out = model.create_completion(
-            prompt, 
-            stop=['<turn|>'],
+            prompt=prompt + '<|channel>thought\n', 
+            max_tokens=think_tokens,
+            stop=['<channel|>'],
+            stream=True
+        )
+        thought = ''
+        for chunk in out:
+            token = chunk['choices'][0]['text']
+            print(token, end='', flush=True)
+            thought += token
+
+        # output completion
+        out = model.create_completion(
+            prompt=prompt + thought + '\n<channel|>',
             max_tokens=out_tokens,
             grammar=grammar
         )
-
         changes = env.parse_completion(out)        
+        
+        # score proposed changes
         for change in changes: 
             try: 
                 score = env.step(change)
                 scored_changes.append({'score': score, 'change': str(change)})
             except Exception as e : 
                 failed_changes.append({'exception': str(e), 'change': str(change)})
+
+        print(env.board)
+        
