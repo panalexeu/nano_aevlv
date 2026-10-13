@@ -4,4 +4,10 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "huggingface-hub>=2.2.0",
+    "llama-cpp-python>=0.3.36",
+    "numpy>=2.5.4",
+    "py-sudoku>=2.0.0",
+    "python-dotenv>=1.2.4",
+]
