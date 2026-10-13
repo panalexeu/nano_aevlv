@@ -1,5 +1,7 @@
+from abc import abstractmethod
 from typing import Optional, Any
-from abc import abstractmethod 
+ 
+from llama_cpp import CreateChatCompletionResponse
 
 class BaseEnv: 
     """
@@ -20,7 +22,28 @@ class BaseEnv:
         """
         pass 
 
+    @abstractmethod 
+    def state(self,) -> str: 
+        """
+        return env state in a string format that can be passed into a language model
+        """
+        pass 
+    
     @abstractmethod
     def instructions(self,) -> str:
         pass 
-    
+
+    @abstractmethod
+    def tools(self,) -> list[dict]: 
+        pass
+
+    @abstractmethod
+    def tool_choices(self,) -> list[dict]: 
+        pass
+
+    @abstractmethod
+    def parse_chat_completion(self, cmpl: CreateChatCompletionResponse) -> list | dict:
+        """
+        parse chat completion into action 
+        """
+        pass 
