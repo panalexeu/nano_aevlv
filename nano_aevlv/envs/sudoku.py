@@ -90,3 +90,7 @@ Respond only with one or more lines in the format row,column,value. For example:
 root ::= line{1,10}
 line ::= [0-9] "," [0-9] "," [1-9] "\n"
 '''
+
+    def is_win(self):
+        return np.array_equal(self.board, self.solution)
+    

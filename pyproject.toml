@@ -10,4 +10,5 @@ dependencies = [
     "numpy>=2.5.4",
     "py-sudoku>=2.0.0",
     "python-dotenv>=1.2.4",
+    "rich>=15.0.0",
 ]

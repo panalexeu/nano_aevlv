@@ -1,6 +1,7 @@
 import os 
 
 import numpy as np
+from rich import print
 from llama_cpp import Llama, LlamaGrammar
 from llama_cpp.llama_chat_format import Jinja2ChatFormatter
 
@@ -31,22 +32,24 @@ def sample_fail_changes(rng, changes: list[dict], n: int) -> list[int]:
 if __name__ == '__main__': 
     # search params 
     iters = 16
-    total_tokens = 1024
-    think_tokens = 512
-    out_tokens = 128 
+    total_tokens = 2048
+    think_tokens = 1024
+    out_tokens = 256
     alpha_name = 'gemma-4-E4B-it-Q4_0.gguf'
     alpha_path = os.path.join(_data_dir, alpha_name)    
     alpha_model = Llama(
         alpha_path, 
         n_gpu_layers=0,
-        n_ctx=total_tokens
+        n_ctx=total_tokens,
+        verbose=False
     )
     beta_name = 'gemma-4-E2B-it-Q4_0.gguf'
     beta_path = os.path.join(_data_dir, beta_name)
     beta_model = Llama(
         beta_path, 
         n_gpu_layers=-1,
-        n_ctx=total_tokens
+        n_ctx=total_tokens, 
+        verbose=False
     )
     model_t = 1.0
     sample_n = 16
@@ -64,13 +67,13 @@ if __name__ == '__main__':
 
     # env 
     env = SudokuEnv()
-    env.reset(seed, difficulty=0.25)
+    env.reset(seed, difficulty=0.5, width=2)
     grammar = LlamaGrammar.from_string(env.grammar())
 
     # search loop
     scored_changes, failed_changes = [], []
     for i in range(iters): 
-        model = beta_model
+        model = alpha_model
 
         sampled_changes_ids = sample_changes(rng, scored_changes, sample_n, sample_t)
         sampled_changes = [scored_changes[id_] for id_ in sampled_changes_ids]
@@ -127,5 +130,12 @@ if __name__ == '__main__':
             except Exception as e : 
                 failed_changes.append({'exception': str(e), 'change': str(change)})
 
-        print(env.board)
-        
+        if env.is_win(): 
+            print('\n' + '-' * 64)
+            print('search finished, win condition is met')
+            print(env.state)
+            break
+
+        print('\n' + '-' * 64)
+        print(f'iter {i}')
+        print(env.state())

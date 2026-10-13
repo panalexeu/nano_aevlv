@@ -46,3 +46,11 @@ class BaseEnv:
         define GBNF llama.cpp grammar for the output completion  
         """
         pass
+
+    @abstractmethod
+    def is_win(self) -> bool: 
+        """
+        some envs might have a win state, or some thresh to pass 
+        """
+        pass
+    
