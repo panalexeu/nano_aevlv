@@ -1,5 +1,8 @@
 import os 
+import json
 from typing import Any
+from pathlib import Path
+from datetime import datetime
 
 from llama_cpp import Llama, LlamaGrammar
 from llama_cpp.llama_chat_format import Jinja2ChatFormatter
@@ -46,6 +49,7 @@ class Search:
             add_generation_prompt=True
         )
         self.seed = seed
+        self.logs = []
 
     def __call__(
         self, 
@@ -55,16 +59,17 @@ class Search:
         sample_e: int = 4, 
         map_size: int = 1024,
         alpha: float = 0.25, 
+        alpha_model: bool = True
     ) -> tuple[int, Any]:
         '''
         returns iter and env state
         '''
-        alpha_i = int(iters / (iters * alpha))
         score_map = ChangeMap(seed=self.seed, size=map_size) 
         fail_map = FailedChangeMap(seed=self.seed, size=map_size) 
+        alpha_i = int(iters / (iters * alpha))
         for i in range(iters): 
             # switch model 
-            is_alpha = ((i % alpha_i) == 0)
+            is_alpha = ((i % alpha_i) == 0) and alpha_model
             if is_alpha:
                 model = self.alpha_model
             else: 
@@ -78,31 +83,38 @@ class Search:
             # think
             msgs = self._form_msg(sampled_changes, sampled_fail_changes)
             prompt = self.formatter(messages=msgs).prompt
-            out = model.create_completion(
+            reasoning = model.create_completion(
                 prompt=prompt+'<|channel>thought\n',
                 max_tokens=self.think_tokens,
                 stop=['<channel|>'], 
                 echo=True
-            )
+            )['choices'][0]['text']
             # response
             out = model.create_completion(
-                prompt=out['choices'][0]['text'], 
+                prompt=reasoning, 
                 max_tokens=self.out_tokens,
                 grammar=self.env_grammar
             ) 
 
             # score the proposed changes 
             changes = self.env.parse_completion(out)
+            scores = []
             for change in changes: 
                 try: 
                     score = self.env.step(change)
                     score_map.add(text=str(change), score=score)
+                    scores.append(score)
                 except Exception as e : 
                     fail_map.add(text=str(change), err=str(e))
 
+            # logging 
+            self._log(reasoning, sampled_changes, sampled_fail_changes, changes, scores, i, is_alpha,)
+
             if self.env.is_win():
+                self._log_export()
                 return i, env.state()
 
+        self._log_export()
         return i, env.state()
     
     def _form_msg(self, sampled_changes: list, sampled_fail_changes: list) -> list[dict]: 
@@ -123,10 +135,39 @@ class Search:
             }
         ]
 
+    def _log(
+        self,
+        reasoning: str, 
+        sampled_changes: list, 
+        sampled_fail_changes: list, 
+        changes: list, 
+        scores: list,
+        iter: int, 
+        is_alpha: bool
+    ): 
+        log = {
+            'iter': iter, 
+            'is_alpha': is_alpha, 
+            'sampled_changes': sampled_changes,
+            'sampled_fail_changes': sampled_fail_changes, 
+            'reasoning': reasoning, 
+            'changes': changes, 
+            'scores': scores
+        }
+        self.logs.append(log)
+
+    def _log_export(self, log_dir: str = 'logs'):
+        '''write all collected logs to <log_dir>/<YYYY-mm-dd_HH-MM-SS>.json and return the path.'''
+        path = Path(log_dir)
+        path.mkdir(parents=True, exist_ok=True)
+        file = path / f'{datetime.now():%Y-%m-%d_%H-%M-%S}.json'
+        with file.open('w', encoding='utf-8') as f:
+            json.dump(self.logs, f, indent=2, ensure_ascii=False)
+
 if __name__ == '__main__': 
     seed = 2004
     env = SudokuEnv()
-    env.reset(seed, difficulty=0.33, width=2)
+    env.reset(seed, difficulty=0.25, width=2)
     search = Search(env, seed, think_tokens=1536)
-    res = search(sample_t=2)
+    res = search(sample_t=2, alpha_model=False)
     print(res)
