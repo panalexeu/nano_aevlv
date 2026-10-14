@@ -57,8 +57,9 @@ class ChangeMap:
         return p / p.sum()
 
     def sample(self, n: int, t: float) -> list[tuple[str, int]]: 
-        if len(self._t_arr) == 0: return []
-        if len(self._t_arr) < n: n = len(self._t_arr)
+        arr_size = np.count_nonzero(self._t_arr != '')
+        if arr_size == 0: return []
+        if len(arr_size) < n: n = len(arr_size)
 
         idxs = [self._get_idx(t) for t in self._t_arr if t != '']
         probs = self._get_probs(idxs, t)
@@ -104,8 +105,9 @@ class FailedChangeMap(ChangeMap):
         return idx 
 
     def sample(self, n: int) -> list[tuple[str, str]]: 
-        if len(self._t_arr) == 0: return []
-        if len(self._t_arr) < n: n = len(self._t_arr)
+        arr_size = np.count_nonzero(self._t_arr != '')
+        if arr_size == 0: return []
+        if len(arr_size) < n: n = len(arr_size)
 
         idxs = [self._get_idx(t) for t in self._t_arr if t != '']
         sampled_idxs = self.rng.choice(len(idxs), size=n, replace=False) # uniform sampling 

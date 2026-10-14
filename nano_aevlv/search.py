@@ -6,28 +6,9 @@ from llama_cpp import Llama, LlamaGrammar
 from llama_cpp.llama_chat_format import Jinja2ChatFormatter
 
 from .envs import SudokuEnv
+from .change_map import FailedChangeMap, ChangeMap
 
 _data_dir = './models'
-
-def _scores2probs(scores: list[float], t: float=1.0):
-    s = np.asarray(scores, dtype=float)
-    s = (s - s.mean()) / (s.std() + 1e-8)  
-    z = s / t
-    z -= z.max()                           
-    p = np.exp(z)
-    return p / p.sum()
-
-def sample_changes(rng, changes: list[dict], n: int, t: float) -> list[int]: 
-    if len(changes) == 0: return []
-    if len(changes)-1 < n: n = len(changes)
-    scores = [ch['score'] for ch in changes]
-    probs = _scores2probs(scores, t)
-    return rng.choice(len(probs), size=n, replace=False, p=probs)
-
-def sample_fail_changes(rng, changes: list[dict], n: int) -> list[int]: 
-    if len(changes) == 0: return []
-    if len(changes)-1 < n: n = len(changes)  
-    return rng.choice(len(changes), size=n, replace=False) # uniform sampling 
 
 if __name__ == '__main__': 
     # search params 
@@ -71,15 +52,13 @@ if __name__ == '__main__':
     grammar = LlamaGrammar.from_string(env.grammar())
 
     # search loop
-    scored_changes, failed_changes = [], []
+    score_map, fail_map = ChangeMap(seed=seed), FailedChangeMap(seed=seed)
     for i in range(iters): 
-        model = alpha_model
+        model = beta_model        
+        sampled_changes = score_map.sample(sample_n, sample_t)
+        sampled_failed_changes = fail_map.sample(sample_e)
 
-        sampled_changes_ids = sample_changes(rng, scored_changes, sample_n, sample_t)
-        sampled_changes = [scored_changes[id_] for id_ in sampled_changes_ids]
-        sampled_failed_changes_ids = sample_fail_changes(rng, failed_changes, sample_e)
-        sampled_failed_changes = [failed_changes[id_] for id_ in sampled_failed_changes_ids]
-
+        # input 
         messages = [
             {
                 "role": "system",
@@ -126,9 +105,9 @@ if __name__ == '__main__':
         for change in changes: 
             try: 
                 score = env.step(change)
-                scored_changes.append({'score': score, 'change': str(change)})
+                score_map.add(text=str(change), score=score)
             except Exception as e : 
-                failed_changes.append({'exception': str(e), 'change': str(change)})
+                fail_map.add(text=str(change), err=str(e))
 
         if env.is_win(): 
             print('\n' + '-' * 64)
@@ -138,4 +117,6 @@ if __name__ == '__main__':
 
         print('\n' + '-' * 64)
         print(f'iter {i}')
+        print(f'proposed changes: {[score_map.get_hash(str(change)) for change in changes]}')
+        print(f'their scores: {[score_map.get_score(str(change)) for change in changes] }')
         print(env.state())
