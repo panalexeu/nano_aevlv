@@ -54,14 +54,21 @@ class Search:
         sample_n: int = 8, 
         sample_e: int = 4, 
         map_size: int = 1024,
+        alpha: float = 0.25, 
     ) -> tuple[int, Any]:
         '''
         returns iter and env state
         '''
+        alpha_i = int(iters / (iters * alpha))
         score_map = ChangeMap(seed=self.seed, size=map_size) 
         fail_map = FailedChangeMap(seed=self.seed, size=map_size) 
         for i in range(iters): 
-            model = self.beta_model # todo implement model switch logic here 
+            # switch model 
+            is_alpha = ((i % alpha_i) == 0)
+            if is_alpha:
+                model = self.alpha_model
+            else: 
+                model = self.beta_model 
             
             # sample proposed scored and failed changes
             sampled_changes = score_map.sample(sample_n, sample_t) 
