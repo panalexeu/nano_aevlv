@@ -33,8 +33,8 @@ if __name__ == '__main__':
     # search params 
     iters = 16
     total_tokens = 2048
-    think_tokens = 1024
-    out_tokens = 256
+    think_tokens = 1536
+    out_tokens = 128
     alpha_name = 'gemma-4-E4B-it-Q4_0.gguf'
     alpha_path = os.path.join(_data_dir, alpha_name)    
     alpha_model = Llama(
