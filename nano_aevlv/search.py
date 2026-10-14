@@ -14,7 +14,7 @@ if __name__ == '__main__':
     # search params 
     iters = 16
     total_tokens = 2048
-    think_tokens = 1536
+    think_tokens = 512
     out_tokens = 128
     alpha_name = 'gemma-4-E4B-it-Q4_0.gguf'
     alpha_path = os.path.join(_data_dir, alpha_name)    
@@ -117,6 +117,6 @@ if __name__ == '__main__':
 
         print('\n' + '-' * 64)
         print(f'iter {i}')
-        print(f'proposed changes: {[score_map.get_hash(str(change)) for change in changes]}')
-        print(f'their scores: {[score_map.get_score(str(change)) for change in changes] }')
+        print(f'proposed changes: {[score_map._get_idx(str(change)) for change in changes]}')
+        print(f'their scores: {[float(score_map.get_score(str(change))) for change in changes] }')
         print(env.state())
