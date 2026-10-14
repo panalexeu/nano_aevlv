@@ -1,6 +1,5 @@
 import numpy as np 
 
-
 class ChangeMap:
     '''
     fixed-size, lossy hash map that keeps the best-scoring change per slot.
@@ -83,12 +82,38 @@ class ChangeMap:
     def __len__(self) -> int:
         return len(self._s_arr)
 
-if __name__ == '__main__': 
-    from rich import print 
-    map = ChangeMap(2004, 1024)
-    print(map.add('oleksii', 10))
-    print(map.add('marcus', 3))
-    print(map.add('john', 4))
-    res = map.sample(4, t=1)
-    print(res)
+class FailedChangeMap(ChangeMap): 
+    '''
+    fixed-size, lossy hash map for failed changes.
+    '''
+    def __init__(self, seed, size = 1024):
+        self.size = size 
+        self.seed = seed 
+        self.rng = np.random.default_rng(self.seed)
+        self._t_arr: list[str] = np.full(self.size, fill_value='', dtype=object)
+        self._e_arr: list[str] = np.full(self.size, fill_value='', dtype=object)
+        self._col = 0 
+
+    def add(self, text: str, err: str) -> int: 
+        idx = self._get_idx(text) 
+        if self._t_arr[idx] != '': self._col += 1
+        self._t_arr[idx] = text; self._e_arr[idx] = err
+        return idx 
+
+    def sample(self, n: int) -> list[tuple[str, str]]: 
+        idxs = [self._get_idx(t) for t in self._t_arr if t != '']
+        sampled_idxs = self.rng.choice(len(idxs), size=n, replace=False) # uniform sampling 
+        return [
+            (self._t_arr[idxs[idx]], self._e_arr[idxs[idx]])
+            for idx in sampled_idxs
+        ]
+
+    def __len__(self):
+        return len(self._t_arr)
+
+    def get_score(self, text):
+        raise NotImplementedError
+    
+    def _get_probs(self, idxs, t):
+        raise NotImplementedError
     
