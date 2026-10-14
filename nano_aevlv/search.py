@@ -1,122 +1,125 @@
 import os 
+from typing import Any
 
-import numpy as np
-from rich import print
 from llama_cpp import Llama, LlamaGrammar
 from llama_cpp.llama_chat_format import Jinja2ChatFormatter
 
-from .envs import SudokuEnv
+from .envs import SudokuEnv, BaseEnv
 from .change_map import FailedChangeMap, ChangeMap
 
-_data_dir = './models'
+class Search: 
+    def __init__(
+        self,
+        env: BaseEnv, 
+        seed: int,
+        total_tokens: int = 2048, 
+        think_tokens: int = 512, 
+        out_tokens: int = 128, 
+        alpha_name: str = 'gemma-4-E4B-it-Q4_0.gguf', 
+        beta_name: str = 'gemma-4-E2B-it-Q4_0.gguf', 
+    ): 
+        self._data_dir = './models'
+        self.env = env 
+        self.env_grammar = LlamaGrammar.from_string(env.grammar())
+        self.total_tokens = total_tokens 
+        self.think_tokens = think_tokens 
+        self.out_tokens = out_tokens 
+        self.alpha_name = alpha_name 
+        self.beta_name = beta_name
+        self.alpha_path = os.path.join(self._data_dir, self.alpha_name)
+        self.alpha_model = Llama(
+            self.alpha_path, 
+            n_gpu_layers=0, # more capable (typically larger) model is offloaded to cpu 
+            n_ctx=total_tokens,
+            verbose=False
+        )
+        self.beta_path = os.path.join(self._data_dir, self.beta_name)
+        self.beta_model = Llama(
+            self.beta_path, 
+            n_gpu_layers=-1,
+            n_ctx=total_tokens, 
+            verbose=False
+        )
+        self.formatter = Jinja2ChatFormatter(
+            template=self.beta_model.metadata['tokenizer.chat_template'], 
+            eos_token='', bos_token='', 
+            add_generation_prompt=True
+        )
+        self.seed = seed
 
-if __name__ == '__main__': 
-    # search params 
-    iters = 16
-    total_tokens = 2048
-    think_tokens = 512
-    out_tokens = 128
-    alpha_name = 'gemma-4-E4B-it-Q4_0.gguf'
-    alpha_path = os.path.join(_data_dir, alpha_name)    
-    alpha_model = Llama(
-        alpha_path, 
-        n_gpu_layers=0,
-        n_ctx=total_tokens,
-        verbose=False
-    )
-    beta_name = 'gemma-4-E2B-it-Q4_0.gguf'
-    beta_path = os.path.join(_data_dir, beta_name)
-    beta_model = Llama(
-        beta_path, 
-        n_gpu_layers=-1,
-        n_ctx=total_tokens, 
-        verbose=False
-    )
-    model_t = 1.0
-    sample_n = 16
-    sample_t = 1.0
-    sample_e = 4
-    seed = 2004
-    rng = np.random.default_rng(seed)
+    def __call__(
+        self, 
+        iters: int = 16,
+        sample_t: float = 1.0,
+        sample_n: int = 8, 
+        sample_e: int = 4, 
+        map_size: int = 1024,
+    ) -> tuple[int, Any]:
+        '''
+        returns iter and env state
+        '''
+        score_map = ChangeMap(seed=self.seed, size=map_size) 
+        fail_map = FailedChangeMap(seed=self.seed, size=map_size) 
+        for i in range(iters): 
+            model = self.beta_model # todo implement model switch logic here 
+            
+            # sample proposed scored and failed changes
+            sampled_changes = score_map.sample(sample_n, sample_t) 
+            sampled_fail_changes = fail_map.sample(sample_e)
+            
+            # output generation in 2 phases (thinking, then output generation)
+            # think
+            msgs = self._form_msg(sampled_changes, sampled_fail_changes)
+            prompt = self.formatter(messages=msgs).prompt
+            out = model.create_completion(
+                prompt=prompt+'<|channel>thought\n',
+                max_tokens=self.think_tokens,
+                stop=['<channel|>'], 
+                echo=True
+            )
+            # response
+            out = model.create_completion(
+                prompt=out['choices'][0]['text'], 
+                max_tokens=self.out_tokens,
+                grammar=self.env_grammar
+            ) 
 
-    # other 
-    formatter = Jinja2ChatFormatter(
-        template=beta_model.metadata['tokenizer.chat_template'], 
-        eos_token='', bos_token='', 
-        add_generation_prompt=True
-    )
+            # score the proposed changes 
+            changes = self.env.parse_completion(out)
+            for change in changes: 
+                try: 
+                    score = self.env.step(change)
+                    score_map.add(text=str(change), score=score)
+                except Exception as e : 
+                    fail_map.add(text=str(change), err=str(e))
 
-    # env 
-    env = SudokuEnv()
-    env.reset(seed, difficulty=0.5, width=2)
-    grammar = LlamaGrammar.from_string(env.grammar())
+            if self.env.is_win():
+                return i, env.state()
 
-    # search loop
-    score_map, fail_map = ChangeMap(seed=seed), FailedChangeMap(seed=seed)
-    for i in range(iters): 
-        model = beta_model        
-        sampled_changes = score_map.sample(sample_n, sample_t)
-        sampled_failed_changes = fail_map.sample(sample_e)
-
-        # input 
-        messages = [
+        return i, env.state()
+    
+    def _form_msg(self, sampled_changes: list, sampled_fail_changes: list) -> list[dict]: 
+        return [
             {
                 "role": "system",
-                "content": env.instructions()
+                "content": self.env.instructions()
             },
             {
                 "role": "user",
-                "content": env.state()
+                "content": self.env.state()
             }, 
             {
-                "role": "user", 
-                "content": "proposed changes and their scores: " + str(sampled_changes)
+                "role": "user", "content": "proposed changes and their scores: " + str(sampled_changes)
             },
             {
-                "role": "user", 
-                "content": "failed changes: " + str(sampled_failed_changes)
+                "role": "user", "content": "failed changes: " + str(sampled_fail_changes)
             }
         ]
 
-        # output generation in 2 phases (thinking, then output generation)
-        # think
-        prompt = formatter(messages=messages).prompt
-        out = model.create_completion(
-            prompt=prompt + '<|channel>thought\n', 
-            max_tokens=think_tokens,
-            stop=['<channel|>'],
-            stream=True
-        )
-        thought = ''
-        for chunk in out:
-            token = chunk['choices'][0]['text']
-            print(token, end='', flush=True)
-            thought += token
-
-        # output completion
-        out = model.create_completion(
-            prompt=prompt + thought + '\n<channel|>',
-            max_tokens=out_tokens,
-            grammar=grammar
-        )
-        changes = env.parse_completion(out)        
-        
-        # score proposed changes
-        for change in changes: 
-            try: 
-                score = env.step(change)
-                score_map.add(text=str(change), score=score)
-            except Exception as e : 
-                fail_map.add(text=str(change), err=str(e))
-
-        if env.is_win(): 
-            print('\n' + '-' * 64)
-            print('search finished, win condition is met')
-            print(env.state)
-            break
-
-        print('\n' + '-' * 64)
-        print(f'iter {i}')
-        print(f'proposed changes: {[score_map._get_idx(str(change)) for change in changes]}')
-        print(f'their scores: {[float(score_map.get_score(str(change))) for change in changes] }')
-        print(env.state())
+if __name__ == '__main__': 
+    seed = 2004
+    env = SudokuEnv()
+    env.reset(seed, difficulty=0.33, width=2)
+    search = Search(env, seed, think_tokens=1536)
+    res = search(sample_t=2)
+    print(res)
