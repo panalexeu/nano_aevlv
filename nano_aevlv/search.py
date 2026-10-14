@@ -15,8 +15,8 @@ class Search:
         self,
         env: BaseEnv, 
         seed: int,
-        total_tokens: int = 2048, 
-        think_tokens: int = 512, 
+        total_tokens: int = 2536, 
+        think_tokens: int = 1024, 
         out_tokens: int = 128, 
         alpha_name: str = 'gemma-4-E4B-it-Q4_0.gguf', 
         beta_name: str = 'gemma-4-E2B-it-Q4_0.gguf', 
@@ -55,8 +55,8 @@ class Search:
         self, 
         iters: int = 16,
         sample_t: float = 1.0,
-        sample_n: int = 8, 
-        sample_e: int = 4, 
+        sample_n: int = 6, 
+        sample_e: int = 3, 
         map_size: int = 1024,
         alpha: float = 0.25, 
         alpha_model: bool = True
@@ -167,7 +167,7 @@ class Search:
 if __name__ == '__main__': 
     seed = 2004
     env = SudokuEnv()
-    env.reset(seed, difficulty=0.25, width=2)
+    env.reset(seed, difficulty=0.5, width=3)
     search = Search(env, seed, think_tokens=1536)
-    res = search(sample_t=2, alpha_model=False)
+    res = search(iters=32, sample_t=2, alpha_model=True)
     print(res)
