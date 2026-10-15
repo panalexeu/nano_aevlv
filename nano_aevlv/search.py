@@ -9,7 +9,7 @@ from rich import print
 from llama_cpp import Llama, LlamaGrammar
 from llama_cpp.llama_chat_format import Jinja2ChatFormatter
 
-from .envs import SudokuEnv, BaseEnv
+from .envs import BaseEnv
 from .change_map import FailedChangeMap, ChangeMap
 
 class Search: 
