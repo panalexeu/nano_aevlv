@@ -1,5 +1,6 @@
 import os 
 import json
+import time 
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Iterator 
@@ -19,7 +20,7 @@ class Search:
         total_tokens: int = 2536, 
         think_tokens: int = 0, 
         out_tokens: int = 128, 
-        alpha_name: str = 'gemma-4-E4B-it-Q4_0.gguf', 
+        alpha_name: str | None = 'gemma-4-E4B-it-Q4_0.gguf', 
         beta_name: str = 'gemma-4-E2B-it-Q4_0.gguf', 
         log_dir: str = 'logs',
     ): 
@@ -31,19 +32,24 @@ class Search:
         self.out_tokens = out_tokens 
         self.alpha_name = alpha_name 
         self.beta_name = beta_name
-        self.alpha_path = os.path.join(self._data_dir, self.alpha_name)
-        self.alpha_model = Llama(
-            self.alpha_path, 
-            n_gpu_layers=0, # more capable (typically larger) model is offloaded to cpu 
-            n_ctx=total_tokens,
-            verbose=False
-        )
+        if self.alpha_name is not None: 
+            self.alpha_path = os.path.join(self._data_dir, self.alpha_name)
+            self.alpha_model = Llama(
+                self.alpha_path, 
+                n_gpu_layers=0, # more capable (typically larger) model is offloaded to cpu 
+                n_ctx=total_tokens,
+                verbose=False, 
+                flash_attn=True, 
+            )
+        else: 
+            self.alpha_model = None
         self.beta_path = os.path.join(self._data_dir, self.beta_name)
         self.beta_model = Llama(
             self.beta_path, 
             n_gpu_layers=-1,
             n_ctx=total_tokens, 
-            verbose=False
+            verbose=False, 
+            flash_attn=True, 
         )
         self.formatter = Jinja2ChatFormatter(
             template=self.beta_model.metadata['tokenizer.chat_template'], 
@@ -61,8 +67,7 @@ class Search:
         sample_n: int = 6, 
         sample_e: int = 3, 
         map_size: int = 1024,
-        alpha: float = 0.25, 
-        alpha_model: bool = True
+        alpha: float = 0.25
     ) -> Iterator[dict]: 
         self._log_init()
 
@@ -71,7 +76,7 @@ class Search:
         fail_map = FailedChangeMap(seed=self.seed, size=map_size) 
         for i in range(iters): 
             # switch model 
-            is_alpha = ((i % alpha_i) == 0) and alpha_model
+            is_alpha = ((i % alpha_i) == 0) and self.alpha_model
             if is_alpha:
                 model = self.alpha_model
             else: 
@@ -85,6 +90,7 @@ class Search:
             # think
             msgs = self._form_msg(sampled_changes, sampled_fail_changes)
             prompt = self.formatter(messages=msgs).prompt
+            start_t = time.time()
             if self.think_tokens > 0: 
                 out = model.create_completion(
                     prompt=prompt+'<|channel>thought\n',
@@ -102,6 +108,7 @@ class Search:
                 max_tokens=self.out_tokens,
                 grammar=self.env_grammar
             ) 
+            end_t = time.time()
 
             # score the proposed changes 
             changes = self.env.parse_completion(out)
@@ -115,7 +122,7 @@ class Search:
                     fail_map.add(text=str(change), err=str(e))
 
             # logging 
-            log = self._log(reasoning, sampled_changes, sampled_fail_changes, changes, scores, i, is_alpha,)
+            log = self._log(reasoning, sampled_changes, sampled_fail_changes, changes, scores, i, is_alpha, round(end_t - start_t, 2))
             yield log
 
             if self.env.is_win():
@@ -161,7 +168,8 @@ class Search:
         changes: list,
         scores: list,
         iter: int,
-        is_alpha: bool
+        is_alpha: bool, 
+        time: float
     ) -> dict:
         '''append one iteration as a json line and flush it to disk.'''
         log = {
@@ -171,16 +179,9 @@ class Search:
             'sampled_fail_changes': sampled_fail_changes,
             'reasoning': reasoning,
             'changes': changes,
-            'scores': scores
+            'scores': scores, 
+            'time': time
         }
         with self.log_file.open('a', encoding='utf-8') as f:
             f.write(json.dumps(log, ensure_ascii=False) + '\n')
         return log
-
-if __name__ == '__main__': 
-    seed = 2004
-    env = SudokuEnv()
-    env.reset(seed, difficulty=0.5, width=3)
-    search = Search(env, seed, think_tokens=0)
-    for log in search.run(iters=32, sample_t=2, alpha_model=False): 
-        print(log)
