@@ -10,7 +10,7 @@ if __name__ == '__main__':
     
     print(env.state())
 
-    search = Search(env, seed, think_tokens=4096, total_tokens=5120, out_tokens=128, alpha_name=None)
+    search = Search(env, seed, think_tokens=4096, total_tokens=5632, out_tokens=128, alpha_name=None)
     for log in search.run(iters=128, sample_n=8, sample_e=8,  sample_t=0.5): 
         print(log)
     
