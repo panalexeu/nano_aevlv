@@ -1,3 +1,4 @@
+# ref: https://en.wikipedia.org/wiki/Circle_packing_in_a_square
 import re
 from typing import Optional
 
