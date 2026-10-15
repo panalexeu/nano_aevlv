@@ -18,6 +18,7 @@ class Search:
         env: BaseEnv, 
         seed: int,
         total_tokens: int = 2536, 
+        batch_tokens: int = 512,
         think_tokens: int = 0, 
         out_tokens: int = 128, 
         alpha_name: str | None = 'gemma-4-E4B-it-Q4_0.gguf', 
@@ -28,6 +29,7 @@ class Search:
         self.env = env 
         self.env_grammar = LlamaGrammar.from_string(env.grammar())
         self.total_tokens = total_tokens 
+        self.batch_tokens = batch_tokens
         self.think_tokens = think_tokens 
         self.out_tokens = out_tokens 
         self.alpha_name = alpha_name 
@@ -38,6 +40,8 @@ class Search:
                 self.alpha_path, 
                 n_gpu_layers=0, # more capable (typically larger) model is offloaded to cpu 
                 n_ctx=total_tokens,
+                n_batch=batch_tokens,
+                n_ubatch=batch_tokens,
                 verbose=False, 
                 flash_attn=True, 
             )
@@ -48,6 +52,8 @@ class Search:
             self.beta_path, 
             n_gpu_layers=-1,
             n_ctx=total_tokens, 
+            n_batch=batch_tokens,
+            n_ubatch=batch_tokens,
             verbose=False, 
             flash_attn=True, 
         )
@@ -76,7 +82,7 @@ class Search:
         fail_map = FailedChangeMap(seed=self.seed, size=map_size) 
         for i in range(iters): 
             # switch model 
-            is_alpha = ((i % alpha_i) == 0) and self.alpha_model
+            is_alpha = ((i % alpha_i) == 0) and (self.alpha_model is not None)
             if is_alpha:
                 model = self.alpha_model
             else: 
