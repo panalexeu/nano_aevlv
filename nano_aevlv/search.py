@@ -20,6 +20,7 @@ class Search:
         out_tokens: int = 128, 
         alpha_name: str = 'gemma-4-E4B-it-Q4_0.gguf', 
         beta_name: str = 'gemma-4-E2B-it-Q4_0.gguf', 
+        log_dir: str = 'logs',
     ): 
         self._data_dir = './models'
         self.env = env 
@@ -49,7 +50,8 @@ class Search:
             add_generation_prompt=True
         )
         self.seed = seed
-        self.logs = []
+        self.log_dir = Path(log_dir)
+        self.log_file: Path | None = None 
 
     def __call__(
         self, 
@@ -64,6 +66,8 @@ class Search:
         '''
         returns iter and env state
         '''
+        self._log_init()
+
         score_map = ChangeMap(seed=self.seed, size=map_size) 
         fail_map = FailedChangeMap(seed=self.seed, size=map_size) 
         alpha_i = int(iters / (iters * alpha))
@@ -114,7 +118,6 @@ class Search:
                 self._log_export()
                 return i, env.state()
 
-        self._log_export()
         return i, env.state()
     
     def _form_msg(self, sampled_changes: list, sampled_fail_changes: list) -> list[dict]: 
@@ -135,39 +138,38 @@ class Search:
             }
         ]
 
+    def _log_init(self): 
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.log_file = self.log_dir / f'{datetime.now():%Y-%m-%d_%H-%M-%S}.jsonl'
+        self.log_file.touch() 
+
     def _log(
         self,
-        reasoning: str, 
-        sampled_changes: list, 
-        sampled_fail_changes: list, 
-        changes: list, 
+        reasoning: str,
+        sampled_changes: list,
+        sampled_fail_changes: list,
+        changes: list,
         scores: list,
-        iter: int, 
+        iter: int,
         is_alpha: bool
-    ): 
+    ):
+        '''append one iteration as a json line and flush it to disk.'''
         log = {
-            'iter': iter, 
-            'is_alpha': is_alpha, 
+            'iter': iter,
+            'is_alpha': is_alpha,
             'sampled_changes': sampled_changes,
-            'sampled_fail_changes': sampled_fail_changes, 
-            'reasoning': reasoning, 
-            'changes': changes, 
+            'sampled_fail_changes': sampled_fail_changes,
+            'reasoning': reasoning,
+            'changes': changes,
             'scores': scores
         }
-        self.logs.append(log)
-
-    def _log_export(self, log_dir: str = 'logs'):
-        '''write all collected logs to <log_dir>/<YYYY-mm-dd_HH-MM-SS>.json and return the path.'''
-        path = Path(log_dir)
-        path.mkdir(parents=True, exist_ok=True)
-        file = path / f'{datetime.now():%Y-%m-%d_%H-%M-%S}.json'
-        with file.open('w', encoding='utf-8') as f:
-            json.dump(self.logs, f, indent=2, ensure_ascii=False)
+        with self.log_file.open('a', encoding='utf-8') as f:
+            f.write(json.dumps(log, ensure_ascii=False) + '\n')
 
 if __name__ == '__main__': 
     seed = 2004
     env = SudokuEnv()
     env.reset(seed, difficulty=0.5, width=3)
     search = Search(env, seed, think_tokens=1536)
-    res = search(iters=32, sample_t=2, alpha_model=True)
+    res = search(iters=32, sample_t=2, alpha_model=False)
     print(res)
