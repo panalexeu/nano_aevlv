@@ -11,7 +11,7 @@ if __name__ == '__main__':
     print(env.state())
 
     search = Search(env, seed, think_tokens=2048, total_tokens=3072,  out_tokens=128, alpha_name=None)
-    for log in search.run(iters=4, sample_n=3, sample_e=8,  sample_t=2): 
+    for log in search.run(iters=4, sample_n=4, sample_e=4,  sample_t=1): 
         print(log)
     
     print(env.state())
