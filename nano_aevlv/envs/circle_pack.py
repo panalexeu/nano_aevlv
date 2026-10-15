@@ -66,18 +66,17 @@ class CirclePack(BaseEnv):
         return f'best packing so far (sum of radii = {self.best_score:.4f}):\n{lines}'
 
     def instructions(self) -> str:
-        return (
-            f'Your task is to pack {self.n} circles inside a unit square (from 0 to 1 on both axes) '
-            'so that the sum of their radii is as large as possible.\n'
-            'Each circle must lie fully inside the square, and no two circles may overlap.\n\n'
-            'After each step, you receive feedback:\n'
-            '- Proposed packings: your previous packings with their scores (sum of radii). Higher is better.\n'
-            '- Failed packings: packings that were invalid, with the reason.\n\n'
-            'Improve on the best packing. Do not repeat failed packings.\n\n'
-            f'Respond only with exactly {self.n} lines in the format x,y,r, one circle per line. For example:\n'
-            '0.1000,0.1000,0.1000\n'
-            '0.3000,0.1000,0.1000'
-        )
+        return '''
+Your task is to pack {self.n} circles inside a unit square (from 0 to 1 on both axes) so that the sum of their radii is as large as possible.
+Each circle must lie fully inside the square, and no two circles may overlap. 
+After each step, you receive feedback:
+- Proposed packings: your previous packings with their scores (sum of radii). Higher is better.
+- Failed packings: packings that were invalid, with the reason.
+Improve on the best packing. Do not repeat failed packings.
+Respond only with exactly {self.n} lines in the format x,y,r, one circle per line. For example:
+0.1000,0.1000,0.1000
+0.3000,0.1000,0.1000
+'''
 
     def parse_completion(self, cmpl: CreateCompletionResponse) -> list:
         text = cmpl['choices'][0]['text']
