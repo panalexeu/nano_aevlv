@@ -44,7 +44,7 @@ class Search:
                 n_ubatch=batch_tokens,
                 verbose=False, 
                 flash_attn=True, 
-                n_threads=4
+                # threads for generation are set by default when class is instantiated 
             )
         else: 
             self.alpha_model = None
