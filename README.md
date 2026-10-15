@@ -4,3 +4,11 @@
 
 A minimal reproduction of [A. Novikov et al., “AlphaEvolve: A coding agent for scientific and algorithmic discovery,” arXiv:2506.13131, 2025](https://arxiv.org/pdf/2506.13131).
 
+## Environments 
+
+* [sudoku](nano_aevlv/envs/sudoku.py)
+* [circle packing](nano_aevlv/envs/circle_pack.py) 
+
+## Evolution search examples 
+
+`sudoku_w2_dif_0_5_think_4096_beta`
