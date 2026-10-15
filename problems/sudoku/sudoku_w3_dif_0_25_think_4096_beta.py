@@ -19,8 +19,8 @@ if __name__ == '__main__':
     #  [1 0 9 2 6 5 4 0 8]
     #  [4 8 2 0 7 1 5 0 9]]
 
-    search = Search(env, seed, think_tokens=2048, total_tokens=3072,  out_tokens=128)
-    for log in search.run(iters=64, sample_n=16, sample_e=5,  sample_t=2): 
+    search = Search(env, seed, think_tokens=4096, total_tokens=5120,  out_tokens=128, alpha_name=None)
+    for log in search.run(iters=64, sample_n=16, sample_e=2,  sample_t=2): 
         print(log)
     
     print(env.state())

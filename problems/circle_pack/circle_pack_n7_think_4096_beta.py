@@ -10,9 +10,9 @@ if __name__ == '__main__':
     
     print(env.state())
 
-    search = Search(env, seed, think_tokens=2048, total_tokens=3072,  out_tokens=128, alpha_name=None)
-    for log in search.run(iters=32, sample_n=4, sample_e=4,  sample_t=1): 
+    search = Search(env, seed, think_tokens=4096, total_tokens=5120, out_tokens=128, alpha_name=None)
+    for log in search.run(iters=64, sample_n=4, sample_e=4,  sample_t=0.5): 
         print(log)
     
     print(env.state())
-    env.plot(path='./logs/circle_pack_n7_think_2048.png')
+    env.plot(path='./logs/circle_pack_n7_think_4096.png')
