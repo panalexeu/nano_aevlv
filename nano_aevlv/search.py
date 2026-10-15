@@ -1,9 +1,10 @@
 import os 
 import json
-from typing import Any
 from pathlib import Path
 from datetime import datetime
+from typing import Any, Iterator 
 
+from rich import print 
 from llama_cpp import Llama, LlamaGrammar
 from llama_cpp.llama_chat_format import Jinja2ChatFormatter
 
@@ -16,7 +17,7 @@ class Search:
         env: BaseEnv, 
         seed: int,
         total_tokens: int = 2536, 
-        think_tokens: int = 1024, 
+        think_tokens: int = 0, 
         out_tokens: int = 128, 
         alpha_name: str = 'gemma-4-E4B-it-Q4_0.gguf', 
         beta_name: str = 'gemma-4-E2B-it-Q4_0.gguf', 
@@ -53,7 +54,7 @@ class Search:
         self.log_dir = Path(log_dir)
         self.log_file: Path | None = None 
 
-    def __call__(
+    def run(
         self, 
         iters: int = 16,
         sample_t: float = 1.0,
@@ -62,15 +63,12 @@ class Search:
         map_size: int = 1024,
         alpha: float = 0.25, 
         alpha_model: bool = True
-    ) -> tuple[int, Any]:
-        '''
-        returns iter and env state
-        '''
+    ) -> Iterator[dict]: 
         self._log_init()
 
+        alpha_i = int(iters / (iters * alpha))
         score_map = ChangeMap(seed=self.seed, size=map_size) 
         fail_map = FailedChangeMap(seed=self.seed, size=map_size) 
-        alpha_i = int(iters / (iters * alpha))
         for i in range(iters): 
             # switch model 
             is_alpha = ((i % alpha_i) == 0) and alpha_model
@@ -87,15 +85,20 @@ class Search:
             # think
             msgs = self._form_msg(sampled_changes, sampled_fail_changes)
             prompt = self.formatter(messages=msgs).prompt
-            reasoning = model.create_completion(
-                prompt=prompt+'<|channel>thought\n',
-                max_tokens=self.think_tokens,
-                stop=['<channel|>'], 
-                echo=True
-            )['choices'][0]['text']
+            if self.think_tokens > 0: 
+                out = model.create_completion(
+                    prompt=prompt+'<|channel>thought\n',
+                    max_tokens=self.think_tokens,
+                    stop=['<channel|>'], 
+                    echo=True
+                )['choices'][0]['text']
+                reasoning = out.split('<|channel>thought\n')[-1]
+            else: 
+                out = prompt 
+                reasoning = '[no reasoning]'
             # response
             out = model.create_completion(
-                prompt=reasoning, 
+                prompt=out, 
                 max_tokens=self.out_tokens,
                 grammar=self.env_grammar
             ) 
@@ -112,13 +115,20 @@ class Search:
                     fail_map.add(text=str(change), err=str(e))
 
             # logging 
-            self._log(reasoning, sampled_changes, sampled_fail_changes, changes, scores, i, is_alpha,)
+            log = self._log(reasoning, sampled_changes, sampled_fail_changes, changes, scores, i, is_alpha,)
+            yield log
 
             if self.env.is_win():
-                self._log_export()
-                return i, env.state()
+                return
 
-        return i, env.state()
+    def __call__(
+        self,
+        **kwargs
+    ) -> tuple[int, Any]:
+        '''run to completion; returns last iter and env state.'''
+        for log in self.run(**kwargs): 
+            i = log['iter']
+        return i, self.env.state()
     
     def _form_msg(self, sampled_changes: list, sampled_fail_changes: list) -> list[dict]: 
         return [
@@ -152,7 +162,7 @@ class Search:
         scores: list,
         iter: int,
         is_alpha: bool
-    ):
+    ) -> dict:
         '''append one iteration as a json line and flush it to disk.'''
         log = {
             'iter': iter,
@@ -165,11 +175,12 @@ class Search:
         }
         with self.log_file.open('a', encoding='utf-8') as f:
             f.write(json.dumps(log, ensure_ascii=False) + '\n')
+        return log
 
 if __name__ == '__main__': 
     seed = 2004
     env = SudokuEnv()
     env.reset(seed, difficulty=0.5, width=3)
-    search = Search(env, seed, think_tokens=1536)
-    res = search(iters=32, sample_t=2, alpha_model=False)
-    print(res)
+    search = Search(env, seed, think_tokens=0)
+    for log in search.run(iters=32, sample_t=2, alpha_model=False): 
+        print(log)
