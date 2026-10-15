@@ -15,3 +15,4 @@ if __name__ == '__main__':
         print(log)
     
     print(env.state())
+    env.plot(path='./logs/circle_pack_n3_think_2048.png')

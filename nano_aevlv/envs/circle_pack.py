@@ -96,3 +96,34 @@ Respond only with exactly {self.n} lines in the format x,y,r, one circle per lin
 
     def is_win(self) -> bool:
         return self.best_score >= self.target
+
+    def plot(self, path: str | None = None, show: bool = True):
+        '''
+        plot the best packing found so far.
+
+        args:
+            path: if given, save the figure to this file.
+            show: display the figure window.
+        '''
+        import matplotlib.pyplot as plt
+        from matplotlib.patches import Circle, Rectangle
+
+        if self.best_packing is None:
+            raise ValueError('no valid packing to plot yet')
+
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.add_patch(Rectangle((0, 0), 1, 1, fill=False, linewidth=1.5))
+        for i, (x, y, r) in enumerate(self.best_packing):
+            ax.add_patch(Circle((x, y), r, alpha=0.5, edgecolor='black'))
+            ax.text(x, y, str(i), ha='center', va='center', fontsize=8)
+
+        ax.set_xlim(-0.02, 1.02)
+        ax.set_ylim(-0.02, 1.02)
+        ax.set_aspect('equal')
+        ax.set_title(f'n = {self.n}, sum of radii = {self.best_score:.6f}')
+
+        if path:
+            fig.savefig(path, dpi=150, bbox_inches='tight')
+        if show:
+            plt.show()
+        plt.close(fig)
