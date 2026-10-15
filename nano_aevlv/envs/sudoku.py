@@ -66,7 +66,7 @@ Your task is to solve the provided sudoku puzzle iteratively.
 The board is a two-dimensional matrix where 0 means an empty cell. Indexing starts from 0.
 
 After each step, you receive feedback:
-- Proposed changes: your previous changes with their scores. 1 means correct and applied to the board. 0 means the value is incorrect or the cell was already filled, and the change was not applied.
+- Proposed changes: your previous changes with their scores. 1 means the change was correct and was applied to the current board. 0 means the value was incorrect or the cell was already filled, and the change was not applied.
 - Failed changes: changes that raised an error, such as an out-of-range index or a malformed line.
 
 Do not repeat changes that scored 0 or failed. Only fill cells that are 0.
