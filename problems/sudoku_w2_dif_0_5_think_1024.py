@@ -6,15 +6,15 @@ from nano_aevlv.envs import SudokuEnv
 if __name__ == '__main__': 
     seed = 2004
     env = SudokuEnv()
-    env.reset(seed, difficulty=0.25, width=2)
+    env.reset(seed, difficulty=0.5, width=2)
     
     print(env.state())
-    # [[4 2 1 0]
-    #  [3 0 0 4]
+    # [[0 2 1 0]
+    #  [0 0 0 4]
     #  [2 4 3 1]
-    #  [1 3 4 0]]
+    #  [1 0 0 0]]
 
-    search = Search(env, seed, think_tokens=768, total_tokens=1536,  out_tokens=128)
+    search = Search(env, seed, think_tokens=1024, total_tokens=1536,  out_tokens=128)
     for log in search.run(iters=32, sample_n=16, sample_e=5,  sample_t=2): 
         print(log)
     

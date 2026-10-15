@@ -44,6 +44,7 @@ class Search:
                 n_ubatch=batch_tokens,
                 verbose=False, 
                 flash_attn=True, 
+                n_threads=4
             )
         else: 
             self.alpha_model = None
