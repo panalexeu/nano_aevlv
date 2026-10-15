@@ -14,7 +14,7 @@ if __name__ == '__main__':
     #  [2 4 3 1]
     #  [1 0 0 0]]
 
-    search = Search(env, seed, think_tokens=1024, total_tokens=1536,  out_tokens=128)
+    search = Search(env, seed, think_tokens=1024, total_tokens=2048,  out_tokens=128)
     for log in search.run(iters=32, sample_n=16, sample_e=5,  sample_t=2): 
         print(log)
     
