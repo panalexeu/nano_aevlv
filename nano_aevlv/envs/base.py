@@ -9,7 +9,7 @@ class BaseEnv:
     """
 
     @abstractmethod
-    def step(action: dict | list) -> tuple[Any | list, Optional[float]]:
+    def step(action: dict | list) -> float:
         """ 
         apply action in the env -> return env state Any and score Optional[float] 
         """
