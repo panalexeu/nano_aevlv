@@ -1,5 +1,4 @@
 from abc import abstractmethod
-from typing import Optional, Any
  
 from llama_cpp import CreateCompletionResponse
 
