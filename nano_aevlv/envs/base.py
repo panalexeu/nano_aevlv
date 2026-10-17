@@ -8,7 +8,7 @@ class BaseEnv:
     """
 
     @abstractmethod
-    def step(action: dict | list) -> float:
+    def step(action: dict | list | str) -> float:
         """ 
         apply action in the env -> return env state Any and score Optional[float] 
         """
