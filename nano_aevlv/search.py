@@ -106,6 +106,7 @@ class Search:
                     echo=True
                 )['choices'][0]['text']
                 reasoning = out.split('<|channel>thought\n')[-1]
+                out += '\n<channel|>' # close thoughts 
             else: 
                 out = prompt 
                 reasoning = '[no reasoning]'
