@@ -1,4 +1,5 @@
 # ref: https://github.com/google-deepmind/funsearch/blob/main/bin_packing/bin_packing.ipynb
+# calling step method with default heuristic 'def priority(item, bins):\n    return -(bins - item)\n' exactly reproduces values for OR3 (-212.0) and Weibull 5k (-2067.0).
 from typing import Literal
 
 import numpy as np 
@@ -35,22 +36,35 @@ class BinPack(BaseEnv):
         self.ds = self.datasets[name]
         self.bound_score = self._l1_bound_ds()
 
-    @staticmethod
-    def _get_valid_bin_indices(item: float, bins: np.ndarray): 
-        res = np.nonzero((bins - item) >= 0)[0] # unpack with [0] cause for some reason np.nonzero returns a tuple
-        return res 
+    def _online_binpack(self, items: list[int], capacity: int, action: str) -> np.ndarray:
+        # a bit cryptic here but basically we moved part of online bin packing logic into the 
+        # sandbox and send immediately all the items, to save time spent on bubblewrap sandbox intialization 
+        # this is the only way to not wait minutes just to eval one heuristic. 
+        # basically runner below repeats logic from google ref online binpack. 
+        _PACK_RUNNER = r'''
+import json, math, sys
+import numpy as np
 
-    def _online_binpack(self, items: list[int], bins: np.ndarray, action: str) -> np.ndarray:
-        # sandboxed online bin pack
-        for item in items:
-            valid_bin_indices = self._get_valid_bin_indices(item, bins)
-            args = [item, bins[valid_bin_indices].tolist()]          # only bins the item fits in
-            priorities = call_sandboxed(code=action, fn='priority', args=args, timeout=3)
-            if len(priorities) != len(valid_bin_indices):
-                raise ValueError(f'priority returned {len(priorities)} scores, expected {len(valid_bin_indices)}')
-            best_bin = valid_bin_indices[np.argmax(priorities)]
-            bins[best_bin] -= item
-        return bins
+req = json.load(sys.stdin)
+try:
+    kwargs = req["kwargs"]
+    fn = req["func"]
+    ns = {"np": np, "math": math}
+    exec(req["code"], ns)
+    priority = ns[fn]
+    capacity = kwargs["capacity"]
+    bins = np.array([capacity] * len(kwargs["items"]))
+    for item in kwargs["items"]:
+        valid = np.nonzero((bins - item) >= 0)[0]
+        priorities = np.asarray(priority(item, bins[valid]))
+        if priorities.shape != (len(valid),):
+            raise ValueError(f"priority returned shape {priorities.shape}, expected ({len(valid)},)")
+        bins[valid[np.argmax(priorities)]] -= item
+    print(json.dumps({"num_bins": int((bins != capacity).sum())}))
+except Exception as e:
+    print(json.dumps({"error": f"{type(e).__name__}: {e}"}))
+'''
+        return call_sandboxed(action, 'priority', _PACK_RUNNER, timeout=10.0, items=items, capacity=capacity)
     
     def step(self, action: str) -> float: 
         num_bins = []
@@ -58,9 +72,8 @@ class BinPack(BaseEnv):
             instance = self.ds[name]
             capacity = instance['capacity']
             items = instance['items']
-            bins = np.array([capacity for _ in range(instance['num_items'])])
-            bins_packed = self._online_binpack(items, bins, action) 
-            num_bins.append((bins_packed != capacity).sum())
+            res = self._online_binpack(items, capacity, action) 
+            num_bins.append(res['num_bins'])
         self.cur_score = -np.mean(num_bins)
         return self.cur_score 
     
@@ -87,7 +100,7 @@ def priority(item: float, bins: np.ndarray) -> np.ndarray:
     return -(bins - item)
 '''.strip() 
 
-    def parse_completion(self, cmpl: CreateCompletionResponse) -> str:
+    def parse_completion(self, cmpl: CreateCompletionResponse) -> list[str]:
         return [cmpl["choices"][0]["text"]] 
 
     def grammar(self) -> str:
@@ -105,9 +118,3 @@ line ::= "    " [^\n]+ "\n"
             excess_pct = 100 * self._calc_excess(self.cur_score, self.bound_score)
             return excess_pct <= self.excesses[self.name]
         return False
-
-if __name__ == '__main__': 
-    pack = BinPack()
-    pack.reset()
-    print(pack.step('def priority(item, bins):\n    return -(bins - item)\n'))
-    

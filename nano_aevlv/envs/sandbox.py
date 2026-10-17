@@ -1,5 +1,6 @@
 import sys 
 import json 
+import resource 
 import subprocess
 from pathlib import Path
 
@@ -20,38 +21,24 @@ def sandboxed(cmd: list[str]) -> list[str]:
         *cmd,
     ]
 
-# rather biased runner for bin packing problem: todo rework this somehow 
-_RUNNER = r'''
-import json, math, sys
-import numpy as np
+def _limits():
+    resource.setrlimit(resource.RLIMIT_AS, (2 << 30, 2 << 30))      # 2 GB memory cap
 
-req = json.load(sys.stdin)
-try:
-    ns = {"np": np, "math": math}
-    exec(req["code"], ns)
-    args = [np.asarray(a) if isinstance(a, list) else a for a in req["args"]]
-    out = ns[req["func"]](*args)
-    out = out.tolist() if isinstance(out, np.ndarray) else out
-    print(json.dumps({"result": out}))
-except Exception as e:
-    print(json.dumps({"error": f"{type(e).__name__}: {e}"}))
-'''
-
-def call_sandboxed(code: str, fn: str, args: list, timeout: float = 10.0):
-    '''run `func(*args)` from `code` in a sandbox; lists are passed as numpy arrays.'''
-    payload = json.dumps({'code': code, 'func': fn, 'args': args})
-    proc = subprocess.run(
-        sandboxed([sys.executable, '-I', '-c', _RUNNER]),   # sandboxed() from the previous message
-        input=payload, capture_output=True, text=True, timeout=timeout,
-    )
-    res = json.loads(proc.stdout.strip().splitlines()[-1])
+def call_sandboxed(code: str, fn: str, runner: str, timeout: float = 10.0, **kwargs) -> dict:
+    '''run `runner` in a sandbox with {code, func, kwargs} on stdin; return its json output.'''
+    payload = json.dumps({'code': code, 'func': fn, 'kwargs': kwargs})
+    try:
+        proc = subprocess.run(
+            sandboxed([sys.executable, '-I', '-c', runner]),
+            input=payload, capture_output=True, text=True,
+            timeout=timeout, preexec_fn=_limits,
+        )
+    except subprocess.TimeoutExpired:
+        raise ValueError(f'timeout after {timeout}s')               # short message for the fail map
+    lines = proc.stdout.strip().splitlines()
+    if not lines:                                                    # bwrap failed, oom kill, interpreter crash
+        raise ValueError(f'sandbox produced no output: {proc.stderr.strip()[-300:]}')
+    res = json.loads(lines[-1])
     if 'error' in res:
         raise ValueError(res['error'])
-    return res['result']
-
-if __name__ == '__main__': 
-    code = '''
-def priority(item, bins):
-    return -(bins - item)
-    '''.strip()
-    print(call_sandboxed(code, 'priority', [30.0, [50.0, 35.0, 90.0]]))
+    return res
