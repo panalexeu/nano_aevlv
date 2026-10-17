@@ -40,7 +40,7 @@ class BinPack(BaseEnv):
         # a bit cryptic here but basically we moved part of online bin packing logic into the 
         # sandbox and send immediately all the items, to save time spent on bubblewrap sandbox intialization 
         # this is the only way to not wait minutes just to eval one heuristic. 
-        # basically runner below repeats logic from google ref online binpack. 
+        # basically runner below repeats logic from google ref online binpack but in sandboxed env with provided heuristic. 
         _PACK_RUNNER = r'''
 import json, math, sys
 import numpy as np
@@ -64,7 +64,7 @@ try:
 except Exception as e:
     print(json.dumps({"error": f"{type(e).__name__}: {e}"}))
 '''
-        return call_sandboxed(action, 'priority', _PACK_RUNNER, timeout=10.0, items=items, capacity=capacity)
+        return call_sandboxed(code=action, fn='priority', runner=_PACK_RUNNER, timeout=10.0, items=items, capacity=capacity)
     
     def step(self, action: str) -> float: 
         num_bins = []
