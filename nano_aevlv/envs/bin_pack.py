@@ -105,8 +105,9 @@ def priority(item: float, bins: np.ndarray) -> np.ndarray:
 
     def grammar(self) -> str:
         return r'''
-root ::= "def priority(item: float, bins: np.ndarray) -> np.ndarray:\n" line{1,96}
-line ::= "    " [^\n]+ "\n"
+root   ::= "def priority(item: float, bins: np.ndarray) -> np.ndarray:\n" line{1,96}
+line   ::= indent [^ \t\n] [^\n]* "\n" | "\n"
+indent ::= "    " ("    "){0,5}
 '''
 
     @staticmethod 
